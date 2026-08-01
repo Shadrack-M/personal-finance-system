@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% set active = "profile" %}
+{% set page_title = "Profile" %}
+
+{% block content %}
+<div class="topbar"><h1>Profile &amp; Settings</h1></div>
+
+<div class="page-body">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+
+  <!-- Profile info -->
+  <div class="card">
+    <div class="card-header"><h3>Account Information</h3></div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('profile') }}">
+        <input type="hidden" name="action" value="profile">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" name="full_name" class="form-control" value="{{ user_data.full_name or '' }}" required>
+        </div>
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" class="form-control" value="{{ user_data.username }}" disabled style="background:#f8fafc;color:var(--text-muted)">
+          <small class="text-muted text-sm">Username cannot be changed.</small>
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" name="email" class="form-control" value="{{ user_data.email }}" required>
+        </div>
+        <div class="form-group">
+          <label>Currency</label>
+          <select name="currency" class="form-control form-select">
+            {% for code, label in [('KES','KES — Kenyan Shilling'),('USD','USD — US Dollar'),('EUR','EUR — Euro'),('GBP','GBP — British Pound'),('NGN','NGN — Nigerian Naira'),('UGX','UGX — Ugandan Shilling'),('TZS','TZS — Tanzanian Shilling')] %}
+            <option value="{{ code }}" {{ 'selected' if user_data.currency==code }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Password -->
+  <div class="card">
+    <div class="card-header"><h3>Change Password</h3></div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('profile') }}">
+        <input type="hidden" name="action" value="password">
+        <div class="form-group">
+          <label>Current Password</label>
+          <input type="password" name="current_password" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>New Password</label>
+          <input type="password" name="new_password" class="form-control" placeholder="At least 6 characters" required>
+        </div>
+        <div class="form-group">
+          <label>Confirm New Password</label>
+          <input type="password" name="confirm_password" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-outline">Update Password</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="card">
+    <div class="card-header"><h3>Account Statistics</h3></div>
+    <div class="card-body">
+      <table style="font-size:.9rem;width:100%">
+        <tr><td class="text-muted" style="padding:.4rem 0">Member since</td><td class="text-right">{{ user_data.created_at.strftime('%d %b %Y') }}</td></tr>
+        <tr><td class="text-muted" style="padding:.4rem 0">Total transactions</td><td class="text-right">{{ stats.tx_count or 0 }}</td></tr>
+        <tr><td class="text-muted" style="padding:.4rem 0">All-time income</td><td class="text-right amount-income">{{ fmt_currency(stats.total_income or 0, session.currency) }}</td></tr>
+        <tr><td class="text-muted" style="padding:.4rem 0">All-time expenses</td><td class="text-right amount-expense">{{ fmt_currency(stats.total_expense or 0, session.currency) }}</td></tr>
+        <tr><td class="text-muted" style="padding:.4rem 0">Net savings</td>
+          <td class="text-right" style="font-weight:600">{{ fmt_currency(((stats.total_income or 0)-(stats.total_expense or 0)), session.currency) }}</td></tr>
+        {% if stats.first_tx %}
+        <tr><td class="text-muted" style="padding:.4rem 0">First transaction</td><td class="text-right">{{ stats.first_tx.strftime('%d %b %Y') }}</td></tr>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+
+  <!-- Sign out -->
+  <div class="card" style="border:1px solid #fecaca">
+    <div class="card-header"><h3 style="color:var(--danger)">Account</h3></div>
+    <div class="card-body">
+      <p class="text-muted text-sm mb-2">Signing out will end your current session.</p>
+      <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">Sign Out</a>
+    </div>
+  </div>
+
+</div>
+</div>
+{% endblock %}

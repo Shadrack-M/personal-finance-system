@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% set active = "dashboard" %}
+{% set page_title = "Dashboard" %}
+
+{% block content %}
+<div class="topbar">
+  <h1>Dashboard</h1>
+  <div class="topbar-actions">
+    <span class="text-muted text-sm">{{ month_name }}</span>
+    <a href="{{ url_for('transactions') }}?add=1" class="btn btn-primary btn-sm">+ Add Transaction</a>
+  </div>
+</div>
+
+<div class="page-body">
+
+<!-- STATS -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon green">↑</div>
+    <div class="stat-body">
+      <div class="stat-label">Income This Month</div>
+      <div class="stat-value">{{ fmt_currency(total_income, session.currency) }}</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon red">↓</div>
+    <div class="stat-body">
+      <div class="stat-label">Expenses This Month</div>
+      <div class="stat-value">{{ fmt_currency(total_expense, session.currency) }}</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon {{ 'blue' if balance >= 0 else 'red' }}">≡</div>
+    <div class="stat-body">
+      <div class="stat-label">Monthly Balance</div>
+      <div class="stat-value" style="color:{{ '#059669' if balance >= 0 else '#dc2626' }}">
+        {{ fmt_currency(balance|abs, session.currency) }}
+      </div>
+      <div class="stat-sub">{{ 'Surplus' if balance >= 0 else 'Deficit' }} this month</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon purple">♡</div>
+    <div class="stat-body">
+      <div class="stat-label">Savings Saved</div>
+      <div class="stat-value">{{ fmt_currency(savings.saved or 0, session.currency) }}</div>
+      <div class="stat-sub">{{ savings.cnt or 0 }} active goal{{ 's' if (savings.cnt or 0) != 1 else '' }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- CHARTS ROW -->
+<div class="dash-grid mb-3">
+
+  <!-- Trend chart -->
+  <div class="card">
+    <div class="card-header"><h3>Income vs Expenses — Last 6 Months</h3></div>
+    <div class="card-body">
+      <div class="chart-container" style="height:220px">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category pie -->
+  <div class="card">
+    <div class="card-header"><h3>Expenses by Category</h3></div>
+    <div class="card-body">
+      {% if cat_expenses %}
+      <div class="chart-container" style="height:220px"><canvas id="catChart"></canvas></div>
+      {% else %}
+      <div class="empty-state"><p>No expense data yet this month.</p></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Recent transactions -->
+  <div class="card">
+    <div class="card-header">
+      <h3>Recent Transactions</h3>
+      <a href="{{ url_for('transactions') }}" class="btn btn-ghost btn-sm">View all</a>
+    </div>
+    {% if recent_tx %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="text-right">Amount</th></tr></thead>
+        <tbody>
+        {% for tx in recent_tx %}
+        <tr>
+          <td class="text-sm">{{ tx.transaction_date.strftime('%d %b') }}</td>
+          <td>{{ tx.description or '—' }}</td>
+          <td>
+            {% if tx.cat_name %}
+            <span class="badge" style="background:{{ tx.cat_color }}22;color:{{ tx.cat_color }}">{{ tx.cat_name }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-right {{ 'amount-income' if tx.type=='income' else 'amount-expense' }}">
+            {{ '+' if tx.type=='income' else '-' }}{{ fmt_currency(tx.amount, session.currency) }}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card-body">
+      <div class="empty-state">
+        <p>No transactions yet.</p>
+        <a href="{{ url_for('transactions') }}?add=1" class="btn btn-primary btn-sm">Add your first</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Budget overview -->
+  <div class="card">
+    <div class="card-header">
+      <h3>Budget Overview</h3>
+      <a href="{{ url_for('budget') }}" class="btn btn-ghost btn-sm">Manage</a>
+    </div>
+    <div class="card-body">
+      {% if budgets %}
+        {% for b in budgets %}
+        {% set spent = b.spent|float %}
+        {% set amt   = b.amount|float %}
+        {% set pct   = [100, ((spent/amt*100)|round|int if amt > 0 else 0)]|min %}
+        {% set color = 'red' if pct >= 90 else ('yellow' if pct >= 70 else 'green') %}
+        <div class="budget-item">
+          <div class="budget-item-header">
+            <span class="budget-item-name">{{ b.name }}</span>
+            <span class="text-sm text-muted">{{ fmt_currency(spent, session.currency) }} / {{ fmt_currency(amt, session.currency) }}</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill {{ color }}" style="width:{{ pct }}%"></div>
+          </div>
+          <div class="text-sm text-muted mt-1">{{ pct }}% used</div>
+        </div>
+        {% endfor %}
+      {% else %}
+      <div class="empty-state">
+        <p>No budgets set.</p>
+        <a href="{{ url_for('budget') }}" class="btn btn-outline btn-sm">Set a budget</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const trend = {{ trend|tojson }};
+new Chart(document.getElementById('trendChart'), {
+  type: 'bar',
+  data: {
+    labels: trend.map(t => t.label),
+    datasets: [
+      { label:'Income',   data: trend.map(t=>t.inc), backgroundColor:'#d1fae5', borderColor:'#059669', borderWidth:1.5, borderRadius:4 },
+      { label:'Expenses', data: trend.map(t=>t.exp), backgroundColor:'#fee2e2', borderColor:'#dc2626', borderWidth:1.5, borderRadius:4 },
+    ]
+  },
+  options: { responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ position:'bottom', labels:{ boxWidth:12, font:{size:11} } } },
+    scales:{ y:{ beginAtZero:true, grid:{color:'#f1f5f9'} }, x:{ grid:{display:false} } }
+  }
+});
+
+{% if cat_expenses %}
+const cats = {{ cat_expenses|tojson }};
+new Chart(document.getElementById('catChart'), {
+  type: 'doughnut',
+  data: { labels: cats.map(c=>c.name), datasets:[{ data:cats.map(c=>c.total), backgroundColor:cats.map(c=>c.color), borderWidth:2, borderColor:'#fff' }] },
+  options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{boxWidth:12,font:{size:11}} } }, cutout:'60%' }
+});
+{% endif %}
+</script>
+{% endblock %}

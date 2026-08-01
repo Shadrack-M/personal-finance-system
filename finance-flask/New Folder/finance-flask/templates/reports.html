@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% set active = "reports" %}
+{% set page_title = "Reports" %}
+
+{% block content %}
+<div class="topbar">
+  <h1>Financial Reports</h1>
+  <div class="topbar-actions">
+    <form method="GET" style="display:flex;gap:.5rem;align-items:center">
+      <select name="year" class="form-control form-select" onchange="this.form.submit()">
+        {% for y in range(now().year-2, now().year+1) %}
+        <option value="{{ y }}" {{ 'selected' if y==filter_year }}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+</div>
+
+<div class="page-body">
+
+<div class="stats-grid mb-3">
+  <div class="stat-card">
+    <div class="stat-icon green">↑</div>
+    <div class="stat-body"><div class="stat-label">Total Income {{ filter_year }}</div><div class="stat-value">{{ fmt_currency(total_inc, session.currency) }}</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon red">↓</div>
+    <div class="stat-body"><div class="stat-label">Total Expenses {{ filter_year }}</div><div class="stat-value">{{ fmt_currency(total_exp, session.currency) }}</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon {{ 'blue' if net>=0 else 'red' }}">≡</div>
+    <div class="stat-body">
+      <div class="stat-label">Net Savings</div>
+      <div class="stat-value" style="color:{{ '#059669' if net>=0 else '#dc2626' }}">{{ fmt_currency(net|abs, session.currency) }}</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon yellow">%</div>
+    <div class="stat-body"><div class="stat-label">Savings Rate</div><div class="stat-value">{{ rate }}%</div><div class="stat-sub">Of income saved</div></div>
+  </div>
+</div>
+
+<!-- Line chart -->
+<div class="card mb-3">
+  <div class="card-header"><h3>Monthly Income vs Expenses — {{ filter_year }}</h3></div>
+  <div class="card-body">
+    <div class="chart-container" style="height:280px"><canvas id="monthlyChart"></canvas></div>
+  </div>
+</div>
+
+<div class="dash-grid mb-3">
+
+  <!-- Income breakdown -->
+  <div class="card">
+    <div class="card-header"><h3>Income Breakdown</h3></div>
+    <div class="card-body">
+      {% if income_by_cat %}
+      <div style="height:200px;margin-bottom:1rem"><canvas id="incCatChart"></canvas></div>
+      <table style="font-size:.85rem;width:100%">
+        {% for c in income_by_cat %}
+        <tr>
+          <td style="padding:.3rem 0">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{{ c.color }};margin-right:.4rem"></span>{{ c.name }}
+          </td>
+          <td class="text-right amount-income">{{ fmt_currency(c.total, session.currency) }}</td>
+          <td class="text-right text-muted">{{ ((c.total|float) / (total_inc|float) * 100)|round|int if total_inc > 0 else 0 }}%
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div class="empty-state" style="padding:1.5rem"><p>No income data.</p></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Expense breakdown -->
+  <div class="card">
+    <div class="card-header"><h3>Expense Breakdown</h3></div>
+    <div class="card-body">
+      {% if expense_by_cat %}
+      <div style="height:200px;margin-bottom:1rem"><canvas id="expCatChart"></canvas></div>
+      <table style="font-size:.85rem;width:100%">
+        {% for c in expense_by_cat %}
+        <tr>
+          <td style="padding:.3rem 0">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{{ c.color }};margin-right:.4rem"></span>{{ c.name }}
+          </td>
+          <td class="text-right amount-expense">{{ fmt_currency(c.total, session.currency) }}</td>
+          <td class="text-right text-muted">{{ ((c.total|float) / (total_inc|float) * 100)|round|int if total_inc > 0 else 0 }}%
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div class="empty-state" style="padding:1.5rem"><p>No expense data.</p></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Top expenses -->
+  <div class="card">
+    <div class="card-header"><h3>Top 5 Largest Expenses</h3></div>
+    {% if top_expenses %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="text-right">Amount</th></tr></thead>
+        <tbody>
+        {% for t in top_expenses %}
+        <tr>
+          <td class="text-sm">{{ t.transaction_date.strftime('%d %b') }}</td>
+          <td>{{ t.description or '—' }}</td>
+          <td class="text-sm">{{ t.cat_name or '—' }}</td>
+          <td class="text-right amount-expense">{{ fmt_currency(t.amount, session.currency) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card-body"><div class="empty-state" style="padding:1.5rem"><p>No data.</p></div></div>
+    {% endif %}
+  </div>
+
+  <!-- Monthly table -->
+  <div class="card">
+    <div class="card-header"><h3>Monthly Summary</h3></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Month</th><th class="text-right">Income</th><th class="text-right">Expenses</th><th class="text-right">Balance</th></tr></thead>
+        <tbody>
+        {% for m in monthly_data %}
+        {% if m.inc > 0 or m.exp > 0 %}
+        {% set net_m = m.inc - m.exp %}
+        <tr>
+          <td>{{ m.month }}</td>
+          <td class="text-right amount-income">{{ fmt_currency(m.inc, session.currency) }}</td>
+          <td class="text-right amount-expense">{{ fmt_currency(m.exp, session.currency) }}</td>
+          <td class="text-right {{ 'amount-income' if net_m>=0 else 'amount-expense' }}">{{ fmt_currency(net_m|abs, session.currency) }}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const mData = {{ monthly_data|tojson }};
+new Chart(document.getElementById('monthlyChart'),{
+  type:'line',
+  data:{ labels:mData.map(m=>m.month), datasets:[
+    { label:'Income',   data:mData.map(m=>m.inc), borderColor:'#059669', backgroundColor:'rgba(5,150,105,.1)', fill:true, tension:.4, pointRadius:4, borderWidth:2 },
+    { label:'Expenses', data:mData.map(m=>m.exp), borderColor:'#dc2626', backgroundColor:'rgba(220,38,38,.07)', fill:true, tension:.4, pointRadius:4, borderWidth:2 },
+  ]},
+  options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}, scales:{ y:{beginAtZero:true,grid:{color:'#f1f5f9'}}, x:{grid:{display:false}} } }
+});
+{% if income_by_cat %}
+const iCats = {{ income_by_cat|tojson }};
+new Chart(document.getElementById('incCatChart'),{ type:'doughnut', data:{ labels:iCats.map(c=>c.name), datasets:[{ data:iCats.map(c=>c.total), backgroundColor:iCats.map(c=>c.color), borderWidth:2, borderColor:'#fff' }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, cutout:'60%' } });
+{% endif %}
+{% if expense_by_cat %}
+const eCats = {{ expense_by_cat|tojson }};
+new Chart(document.getElementById('expCatChart'),{ type:'doughnut', data:{ labels:eCats.map(c=>c.name), datasets:[{ data:eCats.map(c=>c.total), backgroundColor:eCats.map(c=>c.color), borderWidth:2, borderColor:'#fff' }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, cutout:'60%' } });
+{% endif %}
+</script>
+{% endblock %}
