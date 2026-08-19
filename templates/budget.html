@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% set active = "budget" %}
+{% set page_title = "Budgets" %}
+
+{% block content %}
+<div class="topbar">
+  <h1>Budgets</h1>
+  <div class="topbar-actions">
+    <a href="{{ url_for('budget', month=month, year=year, add=1) }}" class="btn btn-primary btn-sm">+ New Budget</a>
+  </div>
+</div>
+
+<div class="page-body">
+
+<!-- Period selector -->
+<form method="GET" action="{{ url_for('budget') }}" class="filter-row mb-2">
+  <select name="month" class="form-control form-select">
+    {% for m in range(1,13) %}
+    <option value="{{ m }}" {{ 'selected' if m==month }}>{{ ['','January','February','March','April','May','June','July','August','September','October','November','December'][m] }}</option>
+    {% endfor %}
+  </select>
+  <select name="year" class="form-control form-select">
+    {% for y in range(now().year-1, now().year+2) %}
+    <option value="{{ y }}" {{ 'selected' if y==year }}>{{ y }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-outline btn-sm">View</button>
+</form>
+
+{% if budgets %}
+{% set total_budget = budgets|map(attribute='amount')|map('float')|sum %}
+{% set total_spent  = budgets|map(attribute='spent')|map('float')|sum %}
+<div class="stats-grid mb-2" style="grid-template-columns:repeat(3,1fr)">
+  <div class="stat-card">
+    <div class="stat-icon blue">◎</div>
+    <div class="stat-body"><div class="stat-label">Total Budgeted</div><div class="stat-value">{{ fmt_currency(total_budget, session.currency) }}</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon red">↓</div>
+    <div class="stat-body"><div class="stat-label">Total Spent</div><div class="stat-value">{{ fmt_currency(total_spent, session.currency) }}</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon {{ 'green' if total_budget >= total_spent else 'red' }}">≡</div>
+    <div class="stat-body">
+      <div class="stat-label">Remaining</div>
+      <div class="stat-value" style="color:{{ '#059669' if total_budget>=total_spent else '#dc2626' }}">
+        {{ fmt_currency((total_budget-total_spent)|abs, session.currency) }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3>Budget Breakdown — {{ month_name }}</h3></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Budget</th><th>Category</th><th>Budgeted</th><th>Spent</th><th>Remaining</th><th>Progress</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for b in budgets %}
+      <tr>
+        <td>{{ b.name }}</td>
+        <td>{{ b.cat_name or '—' }}</td>
+        <td>{{ fmt_currency(b.amount, session.currency) }}</td>
+        <td>{{ fmt_currency(b.spent, session.currency) }}</td>
+        <td class="{{ 'amount-income' if b.remaining>=0 else 'amount-expense' }}">
+          {{ fmt_currency(b.remaining|abs, session.currency) }}
+        </td>
+        <td style="min-width:120px">
+          <div class="progress-track">
+            <div class="progress-fill {{ 'red' if b.pct>=100 else ('yellow' if b.pct>=80 else 'green') }}" style="width:{{ b.pct }}%"></div>
+          </div>
+          <span class="text-sm text-muted">{{ b.pct }}%</span>
+        </td>
+        <td>
+          <a href="{{ url_for('budget', month=month, year=year, edit=b.id) }}" class="btn btn-ghost btn-sm">✎</a>
+          <a href="{{ url_for('budget', month=month, year=year, delete=b.id) }}" class="btn btn-ghost btn-sm"
+             style="color:var(--danger)" onclick="return confirm('Delete this budget?')">✕</a>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card"><div class="card-body">
+  <div class="empty-state">
+    <p>No budgets set for {{ month_name }}.</p>
+    <a href="{{ url_for('budget', month=month, year=year, add=1) }}" class="btn btn-primary btn-sm">Create a budget</a>
+  </div>
+</div></div>
+{% endif %}
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay {{ 'open' if show_modal }}" id="budgetModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>{{ 'Edit' if edit_b else 'New' }} Budget</h3>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <form method="POST" action="{{ url_for('budget') }}">
+      <input type="hidden" name="id" value="{{ edit_b.id if edit_b else 0 }}">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Budget Name</label>
+          <input type="text" name="name" class="form-control"
+                 value="{{ edit_b.name if edit_b else '' }}" placeholder="e.g. Monthly Food Budget" required>
+        </div>
+        <div class="form-group">
+          <label>Limit Amount ({{ session.currency }})</label>
+          <input type="number" name="amount" class="form-control" step="0.01" min="1"
+                 value="{{ edit_b.amount if edit_b else '' }}" placeholder="0.00" required>
+        </div>
+        <div class="form-group">
+          <label>Category (optional)</label>
+          <select name="category_id" class="form-control form-select">
+            <option value="">— All expense categories —</option>
+            {% for c in categories %}
+            <option value="{{ c.id }}" {{ 'selected' if edit_b and edit_b.category_id==c.id }}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+          <div class="form-group">
+            <label>Month</label>
+            <select name="month" class="form-control form-select">
+              {% for m in range(1,13) %}
+              <option value="{{ m }}" {{ 'selected' if m==(edit_b.month if edit_b else month) }}>
+                {{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Year</label>
+            <select name="year" class="form-control form-select">
+              {% for y in range(now().year-1, now().year+3) %}
+              <option value="{{ y }}" {{ 'selected' if y==(edit_b.year if edit_b else year) }}>{{ y }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Budget</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function closeModal(){ document.getElementById('budgetModal').classList.remove('open'); history.replaceState(null,'','{{ url_for("budget") }}'); }
+document.getElementById('budgetModal').addEventListener('click',e=>{ if(e.target===document.getElementById('budgetModal')) closeModal(); });
+</script>
+{% endblock %}

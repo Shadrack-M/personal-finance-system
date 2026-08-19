@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% set active = "savings" %}
+{% set page_title = "Savings Goals" %}
+
+{% block content %}
+<div class="topbar">
+  <h1>Savings Goals</h1>
+  <div class="topbar-actions">
+    <a href="{{ url_for('savings') }}?add=1" class="btn btn-primary btn-sm">+ New Goal</a>
+  </div>
+</div>
+
+<div class="page-body">
+
+{% if goals %}
+{% set total_saved  = goals|map(attribute='saved_amount')|sum %}
+{% set total_target = goals|map(attribute='target_amount')|sum %}
+{% set active_count = goals|selectattr('status','eq','active')|list|length %}
+{% set done_count   = goals|selectattr('status','eq','completed')|list|length %}
+<div class="stats-grid mb-3" style="grid-template-columns:repeat(3,1fr)">
+  <div class="stat-card">
+    <div class="stat-icon green">♡</div>
+    <div class="stat-body"><div class="stat-label">Total Saved</div><div class="stat-value">{{ fmt_currency(total_saved, session.currency) }}</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon blue">◎</div>
+    <div class="stat-body"><div class="stat-label">Total Target</div><div class="stat-value">{{ fmt_currency(total_target, session.currency) }}</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon yellow">≡</div>
+    <div class="stat-body"><div class="stat-label">Goals</div><div class="stat-value">{{ active_count }} active / {{ done_count }} done</div></div>
+  </div>
+</div>
+
+<div class="savings-grid">
+{% for g in goals %}
+<div class="savings-card">
+  <div class="savings-card-header">
+    <div>
+      <div class="savings-card-name">{{ g.name }}</div>
+      <span class="badge badge-{{ g.status }}">{{ g.status|capitalize }}</span>
+    </div>
+    <div class="savings-card-pct">{{ g.pct }}%</div>
+  </div>
+  <div class="progress-track">
+    <div class="progress-fill {{ 'green' if g.pct>=100 else ('blue' if g.pct>=50 else 'yellow') }}" style="width:{{ g.pct }}%"></div>
+  </div>
+  <div class="savings-amounts">
+    <span>{{ fmt_currency(g.saved_amount, session.currency) }} saved</span>
+    <span>of {{ fmt_currency(g.target_amount, session.currency) }}</span>
+  </div>
+  {% if g.remaining > 0 %}
+  <div class="text-sm text-muted mt-1">{{ fmt_currency(g.remaining, session.currency) }} still needed</div>
+  {% endif %}
+  {% if g.deadline %}
+  <div class="text-sm text-muted mt-1">
+    Deadline: {{ g.deadline.strftime('%d %b %Y') }}
+    {% if g.days_left == 0 %}(due today){% else %}({{ g.days_left }} days left){% endif %}
+  </div>
+  {% endif %}
+  <div class="flex gap-1 mt-2">
+    {% if g.status == 'active' %}
+    <button onclick="openFund({{ g.id }}, '{{ g.name }}')" class="btn btn-success btn-sm" style="flex:1">+ Add Funds</button>
+    {% endif %}
+    <a href="{{ url_for('savings') }}?edit={{ g.id }}" class="btn btn-outline btn-sm">✎</a>
+    <a href="{{ url_for('savings') }}?delete={{ g.id }}" class="btn btn-ghost btn-sm"
+       style="color:var(--danger)" onclick="return confirm('Delete this goal?')">✕</a>
+  </div>
+</div>
+{% endfor %}
+</div>
+
+{% else %}
+<div class="card"><div class="card-body">
+  <div class="empty-state">
+    <p>No savings goals yet. Set a goal and start building your future.</p>
+    <a href="{{ url_for('savings') }}?add=1" class="btn btn-primary btn-sm">Create first goal</a>
+  </div>
+</div></div>
+{% endif %}
+</div>
+
+<!-- CREATE / EDIT MODAL -->
+<div class="modal-overlay {{ 'open' if show_modal }}" id="goalModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>{{ 'Edit Goal' if edit_g else 'New Savings Goal' }}</h3>
+      <button class="modal-close" onclick="closeGoalModal()">×</button>
+    </div>
+    <form method="POST" action="{{ url_for('savings') }}">
+      <input type="hidden" name="id" value="{{ edit_g.id if edit_g else 0 }}">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Goal Name</label>
+          <input type="text" name="name" class="form-control"
+                 value="{{ edit_g.name if edit_g else '' }}" placeholder="e.g. Laptop Fund" required>
+        </div>
+        <div class="form-group">
+          <label>Target Amount ({{ session.currency }})</label>
+          <input type="number" name="target" class="form-control" step="0.01" min="1"
+                 value="{{ edit_g.target_amount if edit_g else '' }}" placeholder="0.00" required>
+        </div>
+        <div class="form-group">
+          <label>Amount Already Saved ({{ session.currency }})</label>
+          <input type="number" name="saved" class="form-control" step="0.01" min="0"
+                 value="{{ edit_g.saved_amount if edit_g else '0' }}" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Deadline (optional)</label>
+          <input type="date" name="deadline" class="form-control"
+                 value="{{ edit_g.deadline.isoformat() if edit_g and edit_g.deadline else '' }}">
+        </div>
+        {% if edit_g %}
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status" class="form-control form-select">
+            <option value="active"    {{ 'selected' if edit_g.status=='active' }}>Active</option>
+            <option value="paused"    {{ 'selected' if edit_g.status=='paused' }}>Paused</option>
+            <option value="completed" {{ 'selected' if edit_g.status=='completed' }}>Completed</option>
+          </select>
+        </div>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeGoalModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Goal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ADD FUNDS MODAL -->
+<div class="modal-overlay" id="fundModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add Funds</h3>
+      <button class="modal-close" onclick="closeFundModal()">×</button>
+    </div>
+    <form method="POST" action="{{ url_for('savings') }}">
+      <input type="hidden" name="action" value="fund">
+      <input type="hidden" name="goal_id" id="fundGoalId">
+      <div class="modal-body">
+        <p class="text-muted text-sm mb-2">Adding funds to: <strong id="fundGoalName"></strong></p>
+        <div class="form-group">
+          <label>Amount to Add ({{ session.currency }})</label>
+          <input type="number" name="extra_amount" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeFundModal()">Cancel</button>
+        <button type="submit" class="btn btn-success">Add Funds</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function closeGoalModal(){ document.getElementById('goalModal').classList.remove('open'); history.replaceState(null,'','{{ url_for("savings") }}'); }
+function closeFundModal(){ document.getElementById('fundModal').classList.remove('open'); }
+function openFund(id,name){ document.getElementById('fundGoalId').value=id; document.getElementById('fundGoalName').textContent=name; document.getElementById('fundModal').classList.add('open'); }
+['goalModal','fundModal'].forEach(id=>{ const el=document.getElementById(id); el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('open'); }); });
+</script>
+{% endblock %}

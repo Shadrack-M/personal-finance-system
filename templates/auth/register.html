@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Create Account — FinanceTrack</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="auth-wrapper">
+  <div class="auth-brand">
+    <div class="logo-mark">F</div>
+    <h1>FinanceTrack</h1>
+    <p>Join students taking control of their finances.</p>
+    <ul class="auth-features">
+      <li>Free — no subscription</li>
+      <li>Secure password storage</li>
+      <li>Your data stays private</li>
+      <li>Easy to get started</li>
+    </ul>
+  </div>
+  <div class="auth-form-panel">
+    <h2>Create account</h2>
+    <p class="sub">Start managing your money today</p>
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+    <div class="alert alert-success">{{ success }} <a href="{{ url_for('login') }}">Sign in →</a></div>
+    {% else %}
+    <form method="POST" action="{{ url_for('register') }}">
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" name="full_name" class="form-control" placeholder="Enter your full name" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="username" class="form-control" placeholder="Choose a username" required>
+      </div>
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" name="email" class="form-control" placeholder="Enter your email address" required>
+      </div>
+      <div class="form-group">
+        <label>Currency</label>
+        <select name="currency" class="form-control form-select">
+          <option value="KES">KES — Kenyan Shilling</option>
+          <option value="USD">USD — US Dollar</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="GBP">GBP — British Pound</option>
+          <option value="NGN">NGN — Nigerian Naira</option>
+          <option value="UGX">UGX — Ugandan Shilling</option>
+          <option value="TZS">TZS — Tanzanian Shilling</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" class="form-control" placeholder="At least 6 characters" required>
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" name="confirm" class="form-control" placeholder="Repeat your password" required>
+      </div>
+      <div class="mt-2">
+        <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+      </div>
+    </form>
+    {% endif %}
+    <p class="text-muted text-sm mt-3" style="text-align:center">
+      Already have an account? <a href="{{ url_for('login') }}">Sign in</a>
+    </p>
+  </div>
+</div>
+</body>
+</html>
