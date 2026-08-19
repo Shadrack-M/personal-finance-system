@@ -29,4 +29,4 @@ track income, expenses, budgets, and savings goals.
    http://localhost:5000
 
 ## Project
-APT3065 — Final Year Project
+APT3065 — Mid Year Project
